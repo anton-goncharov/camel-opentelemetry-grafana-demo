@@ -1,1 +1,1 @@
-# camel-opentracing-grafana-demo
+# camel-opentelemetry-grafana-demo
