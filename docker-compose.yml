@@ -1,0 +1,72 @@
+version: '3.3'
+services:
+  dispatch-service:
+    image: hello-service:1.0.0
+    container_name: dispatch
+    networks:
+      - "tempo-net"
+    ports:
+      - "8080:8080"
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:55680
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=dispatcher
+      # sends requests to the 'hello-service' container
+      - SRV_DOWNSTREAM_ENDPOINT=http://hello:8080/hello
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+  hello-service:
+    image: hello-service:1.0.0
+    container_name: hello
+    networks:
+      - "tempo-net"
+    ports:
+      - "8081:8080"
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:55680
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=hello
+      - OTEL_METRICS_EXPORTER=none
+      # we don't use downstream endpoint here
+      - SRV_DOWNSTREAM_ENDPOINT=http://localhost:8081/hello
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://localhost:3100/loki/api/v1/push"
+
+  tempo:
+    hostname: "tempo"
+    image: grafana/tempo:latest
+    networks:
+      - "tempo-net"
+    volumes:
+      - ./tempo-config.yaml:/etc/tempo-config.yaml
+    command: "-config.file=/etc/tempo-config.yaml"
+
+  loki:
+    hostname: "loki"
+    image: grafana/loki:2.2.0
+    ports:
+      - "3100:3100"
+    networks:
+      - "tempo-net"
+    command: "-config.file=/etc/loki/local-config.yaml"
+
+  grafana:
+    hostname: "grafana"
+    image: grafana/grafana:7.5.2
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    networks:
+      - "tempo-net"
+    ports:
+      - "3000:3000"
+networks:
+  tempo-net:
+    # use default driver
